@@ -81,12 +81,12 @@ class VertexScaleAndGravity : public BaseVertex<3, Eigen::Matrix<double, 4, 1>>
     }
 };
 
-class VertexVelocityAndBias : public BaseVertex<9, Eigen::Matrix<double, 9, 1>>
+class VertexVelocityAndBias : public BaseVertex<6, Eigen::Matrix<double, 9, 1>>
 {
   public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    VertexVelocityAndBias() : BaseVertex<9, Eigen::Matrix<double, 9, 1>>()
+    VertexVelocityAndBias() : BaseVertex<6, Eigen::Matrix<double, 6, 1>>()
     {
     }
 
@@ -95,22 +95,22 @@ class VertexVelocityAndBias : public BaseVertex<9, Eigen::Matrix<double, 9, 1>>
 
     virtual void setToOriginImpl() override
     {
-        _estimate = Eigen::Matrix<double, 9, 1>::Zero();
+        _estimate = Eigen::Matrix<double, 6, 1>::Zero();
     }
 
     virtual void oplusImpl(const double *update_) override
     {
-        Eigen::Map<const Eigen::Matrix<double, 9, 1>> update(update_);
+        Eigen::Map<const Eigen::Matrix<double, 6, 1>> update(update_);
         _estimate += update;
     }
 };
 
-class EdgeNavStateInitialization : public BaseMultiEdge<12, IMUPreintegrator>
+class EdgeNavStateInitialization : public BaseMultiEdge<9, IMUPreintegrator>
 {
   public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    EdgeNavStateInitialization() : BaseMultiEdge<12, IMUPreintegrator>()
+    EdgeNavStateInitialization() : BaseMultiEdge<9, IMUPreintegrator>()
     {
         resize(3);
     }
@@ -123,13 +123,14 @@ class EdgeNavStateInitialization : public BaseMultiEdge<12, IMUPreintegrator>
 
     virtual void linearizeOplus() override;
 
-    void SetParams(const Eigen::Vector3d& Pi,const Eigen::Vector3d& Pj, const Eigen::Matrix3d& Ri, const Eigen::Matrix3d& Rj)
+    void SetParams(const Eigen::Vector3d& Pi,const Eigen::Vector3d& Pj, const Eigen::Matrix3d& Ri, const Eigen::Matrix3d& Rj, const Eigen::Vector3d& Gbias)
     {
         // GravityVec = gw;
         _Pi = Pi;
         _Pj = Pj;
         _Ri = Ri;
         _Rj = Rj;
+        _Gbias = Gbias;
     }
 
     Eigen::Matrix<double, 3, 2> computeA(Eigen::Vector3d &n)
@@ -172,8 +173,9 @@ class EdgeNavStateInitialization : public BaseMultiEdge<12, IMUPreintegrator>
     // Gravity vector in 'world' frame
     Vector3d _Pi;
     Vector3d _Pj;
-    Sophus::SO3 _Rj;
-    Sophus::SO3 _Ri;
+    Matrix3d _Rj;
+    Matrix3d _Ri;
+    Vector3d _Gbias;
 
 };
 }

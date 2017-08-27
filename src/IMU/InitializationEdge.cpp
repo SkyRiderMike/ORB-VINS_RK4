@@ -17,19 +17,19 @@ void VertexScaleAndGravity::oplusImpl(const double* update_)
 void EdgeNavStateInitialization::computeError() 
 {
     // const VertexNavState* vNavState = static_cast<const VertexNavState*>(_vertices[0]);
-    const VertexVelocityAndBias* vPVRi = static_cast<const VertexVelocityAndBias*>(_vertices[0]);
-    const VertexVelocityAndBias* vPVRj = static_cast<const VertexVelocityAndBias*>(_vertices[1]);
-    const VertexScaleAndGravity* vScaleGravity = static_cast<const VertexVelocityAndBias*>(_vertices[2]);
+    const VertexVelocityAndBias* vVRi = static_cast<const VertexVelocityAndBias*>(_vertices[0]);
+    const VertexVelocityAndBias* vVRj = static_cast<const VertexVelocityAndBias*>(_vertices[1]);
+    const VertexScaleAndGravity* vScaleGravity = static_cast<const VertexScaleAndGravity*>(_vertices[2]);
 
-    const Eigen::Matrix<double,9,1> vrb_i  = vPVRi->estimate();
+    const Eigen::Matrix<double,6,1> vrb_i  = vVRi->estimate();
     Eigen::Matrix<double,3,1> Vi = vrb_i.segment<3>(0);
     Eigen::Matrix<double,3,1> Bai = vrb_i.segment<3>(3);
-    Eigen::Matrix<double,3,1> Bwi = vrb_i.segment<3>(6);
+    // Eigen::Matrix<double,3,1> Bwi = vrb_i.segment<3>(6);
 
-    const Eigen::Matrix<double,9,1> vrb_j = vPVRj->estimate();
+    const Eigen::Matrix<double,6,1> vrb_j = vVRj->estimate();
     Eigen::Matrix<double,3,1> Vj = vrb_j.segment<3>(0);
     Eigen::Matrix<double,3,1> Baj = vrb_j.segment<3>(3);
-    Eigen::Matrix<double,3,1> Bwj = vrb_j.segment<3>(6);
+    // Eigen::Matrix<double,3,1> Bwj = vrb_j.segment<3>(6);
 
     const Eigen::Matrix<double,4,1> vSv = vScaleGravity->estimate();
     double scale = vSv(0);
@@ -47,10 +47,10 @@ void EdgeNavStateInitialization::computeError()
     // Eigen::Matrix<double, 12, 1> err;
     _error.setZero();
 
-    _error.segment<3>(0) = RiT * (scale * _Pj - scale * _Pi - Vi * dTij - 0.5 * GravityVec * dT2) - (dPij + M.getJPBiasg() * Bwj + M.getJPBiasa() * Baj);
-    _error.segment<3>(3) = RiT * (Vj - Vi - GravityVec * dTij) - (dVij + M.getJVBiasg() * Bwj + M.getJVBiasa() * Baj);
+    _error.segment<3>(0) = RiT * (scale * _Pj - scale * _Pi - Vi * dTij - 0.5 * GravityVec * dT2) - (dPij + M.getJPBiasg() * _Gbias + M.getJPBiasa() * Baj);
+    _error.segment<3>(3) = RiT * (Vj - Vi - GravityVec * dTij) - (dVij + M.getJVBiasg() * _Gbias + M.getJVBiasa() * Baj);
     _error.segment<3>(6) = Baj - Bai;
-    _error.segment<3>(9) = Bwj - Bwi;
+    // _error.segment<3>(9) = Bwj - Bwi;
 
 }
 
@@ -95,6 +95,11 @@ void EdgeNavStateInitialization::linearizeOplus()
     JscaleGravity.block<3,1>(0,0) = RiT * (_Pj - _Pi);
     JscaleGravity.block<3,2>(0,1) = 0.5 * dTij*dTij*RiT * skewgA;
     JscaleGravity.block<3,2>(3,1) = dTij * RiT * skewgA;
+
+    // evaluate
+    _jacobianOplus[0] = JVRi;
+    _jacobianOplus[1] = JVRj;
+    _jacobianOplus[2] = JscaleGravity;
     
 }
 
