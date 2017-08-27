@@ -28,8 +28,8 @@ endif()
 
 LIST(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake_modules)
 
-find_package(OpenCV 2.4.3 REQUIRED)
-find_package(Eigen3 3.1.0 REQUIRED)
+find_package(OpenCV 3.2 REQUIRED)
+find_package(Eigen3 3.2.0 REQUIRED)
 find_package(Pangolin REQUIRED)
 find_package(Cholmod REQUIRED)
 
@@ -81,6 +81,8 @@ src/IMU/so3.cpp
 src/IMU/so3.h
 src/IMU/NavState.h
 src/IMU/NavState.cpp
+src/IMU/InitializationEdge.cpp
+src/IMU/InitializationEdge.h
 
 src/IMU/g2otypes.h
 src/IMU/g2otypes.cpp

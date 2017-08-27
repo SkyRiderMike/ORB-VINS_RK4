@@ -25,6 +25,7 @@
 #include "Thirdparty/g2o/g2o/solvers/linear_solver_eigen.h"
 #include "Thirdparty/g2o/g2o/types/types_six_dof_expmap.h"
 #include "Thirdparty/g2o/g2o/core/robust_kernel_impl.h"
+#include "Thirdparty/g2o/g2o/core/optimization_algorithm_gauss_newton.h"
 #include "Thirdparty/g2o/g2o/solvers/linear_solver_dense.h"
 #include "Thirdparty/g2o/g2o/types/types_seven_dof_expmap.h"
 
@@ -333,7 +334,7 @@ int Optimizer::PoseOptimization(Frame *pFrame, Frame* pLastFrame, const IMUPrein
     g2o::BlockSolverX * solver_ptr = new g2o::BlockSolverX(linearSolver);
 
     g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr);
-    //g2o::OptimizationAlgorithmGaussNewton* solver = new g2o::OptimizationAlgorithmGaussNewton(solver_ptr);
+    
     optimizer.setAlgorithm(solver);
 
     int nInitialCorrespondences=0;
@@ -703,9 +704,8 @@ int Optimizer::PoseOptimization(Frame *pFrame, KeyFrame* pLastKF, const IMUPrein
     linearSolver = new g2o::LinearSolverCholmod<g2o::BlockSolverX::PoseMatrixType>();
 
     g2o::BlockSolverX * solver_ptr = new g2o::BlockSolverX(linearSolver);
-
     g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr);
-    //g2o::OptimizationAlgorithmGaussNewton* solver = new g2o::OptimizationAlgorithmGaussNewton(solver_ptr);
+
     optimizer.setAlgorithm(solver);
 
     int nInitialCorrespondences=0;
@@ -1034,7 +1034,7 @@ void Optimizer::LocalBundleAdjustmentNavState(KeyFrame *pCurKF, const std::list<
 
     g2o::BlockSolverX * solver_ptr = new g2o::BlockSolverX(linearSolver);
 
-    //g2o::OptimizationAlgorithmGaussNewton* solver = new g2o::OptimizationAlgorithmGaussNewton(solver_ptr);
+    
     g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr);
     optimizer.setAlgorithm(solver);
 
@@ -1257,95 +1257,51 @@ void Optimizer::LocalBundleAdjustmentNavState(KeyFrame *pCurKF, const std::list<
         if(*pbStopFlag)
             bDoMore = false;
 
-    if(bDoMore)
+     if (bDoMore)
     {
-    // Check inlier observations
-    for(size_t i=0, iend=vpEdgesMono.size(); i<iend;i++)
-    {
-        g2o::EdgeNavStatePVRPointXYZ* e = vpEdgesMono[i];
-        MapPoint* pMP = vpMapPointEdgeMono[i];
-
-        if(pMP->isBad())
-            continue;
-
-        if(e->chi2()>5.991 || !e->isDepthPositive())
+        // Check inlier observations
+        for (size_t i = 0, iend = vpEdgesMono.size(); i < iend; i++)
         {
-            e->setLevel(1);
+            g2o::EdgeNavStatePVRPointXYZ *e = vpEdgesMono[i];
+            MapPoint *pMP = vpMapPointEdgeMono[i];
+
+            if (pMP->isBad())
+                continue;
+
+            if (e->chi2() > 5.991 || !e->isDepthPositive())
+            {
+                e->setLevel(1);
+            }
+
+            e->setRobustKernel(0);
         }
 
-        e->setRobustKernel(0);
+        // Optimize again without the outliers
+        optimizer.initializeOptimization(0);
+        optimizer.optimize(10);
     }
 
-//    // Check inlier observations
-//    for(size_t i=0, iend=vpEdgesNavStatePVR.size(); i<iend; i++)
-//    {
-//        g2o::EdgeNavStatePVR* e = vpEdgesNavStatePVR[i];
-//        if(e->chi2()>21.666)
-//        {
-//            //e->setLevel(1);
-//            //cout<<"1 PVRedge "<<i<<", chi2 "<<e->chi2()<<". ";
-//        }
-//        //e->setRobustKernel(0);
-//    }
-//    for(size_t i=0, iend=vpEdgesNavStateBias.size(); i<iend; i++)
-//    {
-//        g2o::EdgeNavStateBias* e = vpEdgesNavStateBias[i];
-//        if(e->chi2()>16.812)
-//        {
-//            //e->setLevel(1);
-//            //cout<<"1 Bias edge "<<i<<", chi2 "<<e->chi2()<<". ";
-//        }
-//        //e->setRobustKernel(0);
-//    }
-
-    // Optimize again without the outliers
-    optimizer.initializeOptimization(0);
-    optimizer.optimize(10);
-
-    }
-
-    //
-    vector<pair<KeyFrame*,MapPoint*> > vToErase;
+    vector<pair<KeyFrame *, MapPoint *>> vToErase;
     vToErase.reserve(vpEdgesMono.size());
 
-    double PosePointchi2=0;
+    double PosePointchi2 = 0;
     // Check inlier observations
-    for(size_t i=0, iend=vpEdgesMono.size(); i<iend;i++)
+    for (size_t i = 0, iend = vpEdgesMono.size(); i < iend; i++)
     {
-        g2o::EdgeNavStatePVRPointXYZ* e = vpEdgesMono[i];
-        MapPoint* pMP = vpMapPointEdgeMono[i];
+        g2o::EdgeNavStatePVRPointXYZ *e = vpEdgesMono[i];
+        MapPoint *pMP = vpMapPointEdgeMono[i];
 
-        if(pMP->isBad())
+        if (pMP->isBad())
             continue;
 
-        if(e->chi2()>5.991 || !e->isDepthPositive())
+        if (e->chi2() > 5.991 || !e->isDepthPositive())
         {
-            KeyFrame* pKFi = vpEdgeKFMono[i];
-            vToErase.push_back(make_pair(pKFi,pMP));
+            KeyFrame *pKFi = vpEdgeKFMono[i];
+            vToErase.push_back(make_pair(pKFi, pMP));
         }
 
         PosePointchi2 += e->chi2();
     }
-
-//    // Debug log
-//    // Check inlier observations
-//    for(size_t i=0, iend=vpEdgesNavStatePVR.size(); i<iend; i++)
-//    {
-//        g2o::EdgeNavStatePVR* e = vpEdgesNavStatePVR[i];
-//        if(e->chi2()>21.666)
-//        {
-//            //cout<<"2 PVRedge "<<i<<", chi2 "<<e->chi2()<<". ";
-//        }
-//    }
-//    for(size_t i=0, iend=vpEdgesNavStateBias.size(); i<iend; i++)
-//    {
-//        g2o::EdgeNavStateBias* e = vpEdgesNavStateBias[i];
-//        if(e->chi2()>16.812)
-//        {
-//            //cout<<"2 Bias edge "<<i<<", chi2 "<<e->chi2()<<". ";
-//        }
-//    }
-//    //cout<<"pose-point chi2: "<<PosePointchi2<<", pose-pose chi2: "<<PosePosechi2<<endl;
 
     // Get Map Mutex
     unique_lock<mutex> lock(pMap->mMutexMapUpdate);
@@ -1428,7 +1384,7 @@ Vector3d Optimizer::OptimizeInitialGyroBias(const std::vector<Frame> &vFrames)
 
     g2o::BlockSolverX * solver_ptr = new g2o::BlockSolverX(linearSolver);
 
-    g2o::OptimizationAlgorithmGaussNewton* solver = new g2o::OptimizationAlgorithmGaussNewton(solver_ptr);
+    g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr);
     //g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr);
     optimizer.setAlgorithm(solver);
 
@@ -1497,7 +1453,7 @@ Vector3d Optimizer::OptimizeInitialGyroBias(const std::vector<KeyFrame *> &vpKFs
 
     g2o::BlockSolverX * solver_ptr = new g2o::BlockSolverX(linearSolver);
 
-    g2o::OptimizationAlgorithmGaussNewton* solver = new g2o::OptimizationAlgorithmGaussNewton(solver_ptr);
+    g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr);
     //g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr);
     optimizer.setAlgorithm(solver);
 
@@ -2110,7 +2066,7 @@ int Optimizer::PoseOptimization(Frame *pFrame)
     g2o::BlockSolver_6_3 * solver_ptr = new g2o::BlockSolver_6_3(linearSolver);
 
     g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr);
-    //g2o::OptimizationAlgorithmGaussNewton* solver = new g2o::OptimizationAlgorithmGaussNewton(solver_ptr);
+    
     optimizer.setAlgorithm(solver);
 
     int nInitialCorrespondences=0;
@@ -2311,21 +2267,6 @@ int Optimizer::PoseOptimization(Frame *pFrame)
     g2o::SE3Quat SE3quat_recov = vSE3_recov->estimate();
     cv::Mat pose = Converter::toCvMat(SE3quat_recov);
     pFrame->SetPose(pose);
-
-//    //For Test
-//    g2o::SparseBlockMatrixXd spinv;
-//    bool flag = optimizer.computeMarginals(spinv,optimizer.vertex(0));
-//    cout<<"spinv: "<<spinv<<endl;
-//    if(!flag) cerr<<"computeMarginals failed. vertex hessian id: "<<optimizer.vertex(0)->hessianIndex()<<endl;
-
-//    //For Test
-//    static_cast<g2o::OptimizationAlgorithmGaussNewton*>(optimizer.solver())->solver()->vectorSize();
-//    cout<<"vector size: "<<solver_ptr->vectorSize()<<endl;
-//    MatrixXd Hpp = *(solver_ptr->getHpp()->block(0,0));
-//    cout<<"Hpp: "<<Hpp<<endl;
-//    cout<<"Hpp.inverse: "<<Hpp.inverse()<<endl;
-//    Eigen::Map<VectorXd> bvec(solver_ptr->b(), solver_ptr->vectorSize());
-//    cout<<"b: "<<bvec.transpose()<<endl;
 
     return nInitialCorrespondences-nBad;
 }

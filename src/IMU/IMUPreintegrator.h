@@ -32,19 +32,19 @@ public:
     void update(const Vector3d& omega, const Vector3d& acc, const double& dt);
 
     // delta measurements, position/velocity/rotation(matrix)
-    inline Eigen::Vector3d getDeltaP() const    // P_k+1 = P_k + V_k*dt + R_k*a_k*dt*dt/2
+    inline Eigen::Vector3d getDeltaP() const // P_k+1 = P_k + V_k*dt + R_k*a_k*dt*dt/2
     {
         return _rk4Preint._J_State._J3;
         // return _delta_P;
     }
-        inline Eigen::Vector3d getDeltaV() const    // V_k+1 = V_k + R_k*a_k*dt
+    inline Eigen::Vector3d getDeltaV() const // V_k+1 = V_k + R_k*a_k*dt
     {
-        return _rk4Preint._J_State._J2;//
+        return _rk4Preint._J_State._J2; //
         // return _delta_V;
     }
-        inline Eigen::Matrix3d getDeltaR() const   // R_k+1 = R_k*exp(w_k*dt).     NOTE: Rwc, Rwc'=Rwc*[w_body]x
+    inline Eigen::Matrix3d getDeltaR() const // R_k+1 = R_k*exp(w_k*dt).     NOTE: Rwc, Rwc'=Rwc*[w_body]x
     {
-        return _rk4Preint._J_State._J1;//
+        return _rk4Preint._J_State._J1; //
         //return _delta_R;
     }
 

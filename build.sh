@@ -33,6 +33,7 @@ cd ..
 
 echo "Build ROS node ..."
 
+export ROS_PACKAGE_PATH=${ROS_PACKAGE_PATH}:/mnt/d/Code/ORB-VINS_RK4/Examples/ROS
 cd Examples/ROS/ORB_VIO
 mkdir build
 cd build
