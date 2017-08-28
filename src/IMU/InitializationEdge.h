@@ -9,7 +9,7 @@
 #include "Thirdparty/g2o/g2o/core/base_binary_edge.h"
 #include "Thirdparty/g2o/g2o/types/types_six_dof_expmap.h"
 
-#define SMALL_EPS 1e-10
+#include "mathfuncs.h"
 
 // unused yet.
 namespace g2o
@@ -28,8 +28,9 @@ class VertexScaleAndGravity : public BaseVertex<3, Eigen::Matrix<double, 4, 1>>
   public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    VertexScaleAndGravity() : BaseVertex<3, Eigen::Matrix<double, 4, 1>>()
+    VertexScaleAndGravity() : BaseVertex<3, Eigen::Matrix<double, 4, 1> >()
     {
+        setToOriginImpl();
     }
 
     bool read(std::istream &is) { return true; }
@@ -45,53 +46,21 @@ class VertexScaleAndGravity : public BaseVertex<3, Eigen::Matrix<double, 4, 1>>
 
     virtual void oplusImpl(const double *update_);
 
-    Eigen::Matrix<double, 3, 2> computeA(Eigen::Vector3d &n)
-    {
-        size_t minid;
-        Eigen::Matrix<double, 3, 2> A;
-        n.cwiseAbs().minCoeff(&minid);
-        switch (minid)
-        {
-        case 0:
-            A.col(0) = Eigen::Vector3d(0.0, -n(2), n(1));
-            break;
-        case 1:
-            A.col(0) = Eigen::Vector3d(n(2), 0.0, n(0));
-            break;
-        case 2:
-            A.col(0) = Eigen::Vector3d(n(1), -n(0), 0.0);
-            break;
-        }
-        A.col(1) = n.cross(A.col(0));
-        return A;
-    }
 
-    Eigen::Matrix3d Exp(const Eigen::Vector3d &dx)
-    {
-        double theta = dx.norm();
-        if (theta < SMALL_EPS)
-        {
-            return Eigen::Matrix3d::Identity();
-        }
-        else
-        {
-            Eigen::Matrix3d hatdx = skew(dx / theta);
-            return Eigen::Matrix3d::Identity() + sin(theta) * hatdx + (1 - cos(theta)) * hatdx * hatdx;
-        }
-    }
 };
 
-class VertexVelocityAndBias : public BaseVertex<6, Eigen::Matrix<double, 9, 1>>
+class VertexVelocityAndBias : public BaseVertex<6, Eigen::Matrix<double, 6, 1>>
 {
   public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    VertexVelocityAndBias() : BaseVertex<6, Eigen::Matrix<double, 6, 1>>()
+    VertexVelocityAndBias() : BaseVertex<6, Eigen::Matrix<double, 6, 1> >()
     {
+        setToOriginImpl();
     }
 
     bool read(std::istream &is) { return true; }
-    bool write(std::ostream &os) { return true; }
+    bool write(std::ostream &os) const { return true; }
 
     virtual void setToOriginImpl() override
     {
@@ -100,7 +69,7 @@ class VertexVelocityAndBias : public BaseVertex<6, Eigen::Matrix<double, 9, 1>>
 
     virtual void oplusImpl(const double *update_) override
     {
-        Eigen::Map<const Eigen::Matrix<double, 6, 1>> update(update_);
+        Eigen::Map<const Eigen::Matrix<double, 6, 1> > update(update_);
         _estimate += update;
     }
 };
@@ -123,51 +92,20 @@ class EdgeNavStateInitialization : public BaseMultiEdge<9, IMUPreintegrator>
 
     virtual void linearizeOplus() override;
 
-    void SetParams(const Eigen::Vector3d& Pi,const Eigen::Vector3d& Pj, const Eigen::Matrix3d& Ri, const Eigen::Matrix3d& Rj, const Eigen::Vector3d& Gbias)
+    void SetParams(const Eigen::Vector3d& Pi, // i is the last keyframe
+                   const Eigen::Vector3d& Pj, // j is the current keyframe
+                   const Eigen::Matrix3d& Ri, 
+                   const Eigen::Matrix3d& Rj, 
+                   const Eigen::Vector3d& Gbiasj)
     {
         // GravityVec = gw;
         _Pi = Pi;
         _Pj = Pj;
         _Ri = Ri;
         _Rj = Rj;
-        _Gbias = Gbias;
+        _Gbiasj = Gbiasj;
     }
 
-    Eigen::Matrix<double, 3, 2> computeA(Eigen::Vector3d &n)
-    {
-        size_t minid;
-        Eigen::Matrix<double, 3, 2> A;
-        n.abs().minCoeff(&minid);
-        switch (minid)
-        {
-        case 0:
-            A.col(0) = Eigen::Vector3d(0.0, -n(2), n(1));
-            break;
-        case 1:
-            A.col(0) = Eigen::Vector3d(n(2), 0.0, n(0));
-            break;
-        case 2:
-            A.col(0) = Eigen::Vector3d(n(1), -n(0), 0.0);
-            break;
-        }
-        A.col(1) = n.cross(A.col(0));
-        return A;
-    }
-
-    Eigen::Matrix3d skew(const Eigen::Vector3d &v) {
-        Eigen::Matrix3d mat;
-        mat(0, 0) = 0.0;
-        mat(0, 1) = -v(2);
-        mat(0, 2) = v(1);
-        mat(1, 0) = v(2);
-        mat(1, 1) = 0.0;
-        mat(1, 2) = -v(0);
-        mat(2, 0) = -v(1);
-        mat(2, 1) = v(0);
-        mat(2, 2) = 0.0;
-
-        return mat;
-    }
 
   protected:
     // Gravity vector in 'world' frame
@@ -175,7 +113,7 @@ class EdgeNavStateInitialization : public BaseMultiEdge<9, IMUPreintegrator>
     Vector3d _Pj;
     Matrix3d _Rj;
     Matrix3d _Ri;
-    Vector3d _Gbias;
+    Vector3d _Gbiasj;
 
 };
 }

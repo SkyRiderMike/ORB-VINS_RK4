@@ -28,6 +28,7 @@
 #include "Frame.h"
 
 #include "Thirdparty/g2o/g2o/types/types_seven_dof_expmap.h"
+#include "../src/IMU/InitializationEdge.h"
 
 namespace ORB_SLAM2
 {
@@ -49,6 +50,8 @@ public:
     Vector3d static OptimizeInitialGyroBias(const std::vector<Frame> &vFrames);
 
     void static LocalBundleAdjustment(KeyFrame *pKF, const std::list<KeyFrame*> &lLocalKeyFrames, bool* pbStopFlag, Map* pMap, LocalMapping* pLM=NULL);
+
+    void static VIOInitialization(const std::vector<KeyFrame*>& vKeyFrames);
 
 public:
     void static BundleAdjustment(const std::vector<KeyFrame*> &vpKF, const std::vector<MapPoint*> &vpMP,

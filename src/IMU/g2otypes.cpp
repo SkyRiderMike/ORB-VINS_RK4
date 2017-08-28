@@ -714,7 +714,7 @@ void EdgeNavStateGw::linearizeOplus()
     _jacobianOplusXi.block<3,3>(12,3) = O3x3;     //dvi
     _jacobianOplusXi.block<3,3>(12,6) = O3x3;     //dphi_i
     _jacobianOplusXi.block<3,3>(12,9) = O3x3;    //dbg_i
-    _jacobianOplusXi.block<3,3>(12,12)= -I3x3;     //dba_i
+    _jacobianOplusXi.block<3,3>(12,12)=  -I3x3;     //dba_i
 
     // 5.
     // For Vertex_j

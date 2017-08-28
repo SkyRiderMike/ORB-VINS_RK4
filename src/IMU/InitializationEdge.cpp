@@ -9,9 +9,10 @@ void VertexScaleAndGravity::oplusImpl(const double* update_)
 {
     _estimate(0) += update_[0];
     Eigen::Map<const Eigen::Matrix<double,2,1> > update(update_ + 1);
-    Eigen::Map<Eigen::Matrix<double,3,1> > _gravity(_estimate + 1);
-    Eigen::Vector3d _gravity_update = computeA(_gravity) * update;
-    _gravity = Exp(_gravity_update) * _gravity;
+    
+    Eigen::Vector3d g = _estimate.segment<3>(1);
+    Eigen::Vector3d _gravity_update = computeA(g) * update;
+    _estimate.segment<3>(1) = Exp(_gravity_update) *g;
 }
 
 void EdgeNavStateInitialization::computeError() 
@@ -42,13 +43,13 @@ void EdgeNavStateInitialization::computeError()
     Eigen::Vector3d dVij = M.getDeltaV();
     
     // tmp variable, transpose of Ri
-    Eigen::Matrix3d RiT = _Ri.t();
+    Eigen::Matrix3d RiT = _Ri.transpose();
 
     // Eigen::Matrix<double, 12, 1> err;
     _error.setZero();
 
-    _error.segment<3>(0) = RiT * (scale * _Pj - scale * _Pi - Vi * dTij - 0.5 * GravityVec * dT2) - (dPij + M.getJPBiasg() * _Gbias + M.getJPBiasa() * Baj);
-    _error.segment<3>(3) = RiT * (Vj - Vi - GravityVec * dTij) - (dVij + M.getJVBiasg() * _Gbias + M.getJVBiasa() * Baj);
+    _error.segment<3>(0) = RiT * (scale * _Pj - scale * _Pi - Vi * dTij - 0.5 * GravityVec * dT2) - (dPij + M.getJPBiasg() * _Gbiasj + M.getJPBiasa() * Baj);
+    _error.segment<3>(3) = RiT * (Vj - Vi - GravityVec * dTij) - (dVij + M.getJVBiasg() * _Gbiasj + M.getJVBiasa() * Baj);
     _error.segment<3>(6) = Baj - Bai;
     // _error.segment<3>(9) = Bwj - Bwi;
 
@@ -56,27 +57,24 @@ void EdgeNavStateInitialization::computeError()
 
 void EdgeNavStateInitialization::linearizeOplus()
 {
-    // const VertexNavState* vNavState = static_cast<const VertexNavState*>(_vertices[0]);
-    const VertexScaleAndGravity* vScaleGravity = static_cast<const VertexVelocityAndBias*>(_vertices[2]);
+    // const VertexNavState* vNavStatex = static_cast<const VertexNavState*>(_vertices[0]);
+    const VertexScaleAndGravity* vScaleGravity = static_cast<const VertexScaleAndGravity*>(_vertices[2]);
 
     const Eigen::Matrix<double,4,1> vSv = vScaleGravity->estimate();
-    double scale = vSv(0);
+    // double scale = vSv(0);
     Eigen::Matrix<double, 3,1> Gravity = vSv.segment<3>(1);
 
     const IMUPreintegrator& M = _measurement;
     double dTij = M.getDeltaTime(); 
     double dT2 = dTij*dTij;
-    Eigen::Vector3d dPij = M.getDeltaP();
-    Eigen::Vector3d dVij = M.getDeltaV();
-    Sophus::SO3 dRij = Sophus::SO3(M.getDeltaR()); 
-
+    
     // tmp variable, transpose of Ri
-    Eigen::Matrix<double, 12, 9> JVRi, JVRj;
+    Eigen::Matrix<double, 9, 6> JVRi, JVRj;
     JVRi.setZero();
     JVRj.setZero();
-    Eigen::Matrix<double, 12, 3> JscaleGravity;
+    Eigen::Matrix<double, 9, 6> JscaleGravity;
     JscaleGravity.setZero();
-    Eigen::Matrix3d RiT = _Ri.t(); 
+    Eigen::Matrix3d RiT = _Ri.transpose(); 
     JVRi.block<3,3>(0,0) = -dTij * RiT;
     JVRi.block<3,3>(3,0) = -RiT;
     JVRi.block<3,3>(6,3) = -Eigen::Matrix3d::Identity();
@@ -93,7 +91,7 @@ void EdgeNavStateInitialization::linearizeOplus()
     Eigen::Matrix<double,3,2> skewgA  = skew(Gravity)*computeA(Gravity);
 
     JscaleGravity.block<3,1>(0,0) = RiT * (_Pj - _Pi);
-    JscaleGravity.block<3,2>(0,1) = 0.5 * dTij*dTij*RiT * skewgA;
+    JscaleGravity.block<3,2>(0,1) = 0.5 * dT2 * RiT * skewgA;
     JscaleGravity.block<3,2>(3,1) = dTij * RiT * skewgA;
 
     // evaluate

@@ -38,6 +38,7 @@ public:
         Eigen::Map<const Vector9d> update(update_);
         _estimate.IncSmallPVR(update);
     }
+   
 
 };
 
@@ -65,26 +66,28 @@ public:
 
 class EdgeNavStatePVR : public BaseMultiEdge<9, IMUPreintegrator>
 {
-public:
+  public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    EdgeNavStatePVR() : BaseMultiEdge<9, IMUPreintegrator>() {
+    EdgeNavStatePVR() : BaseMultiEdge<9, IMUPreintegrator>()
+    {
         resize(3);
     }
 
-    bool read(std::istream& is) {return true;}
+    bool read(std::istream &is) { return true; }
 
-    bool write(std::ostream& os) const {return true;}
+    bool write(std::ostream &os) const { return true; }
 
     void computeError();
 
     virtual void linearizeOplus();
 
-    void SetParams(const Vector3d& gw) {
+    void SetParams(const Vector3d &gw)
+    {
         GravityVec = gw;
     }
 
-protected:
+  protected:
     // Gravity vector in 'world' frame
     Vector3d GravityVec;
 };
