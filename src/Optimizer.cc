@@ -316,7 +316,7 @@ void Optimizer::GlobalBundleAdjustmentNavState(Map *pMap, const cv::Mat &gw, int
     }
 }
 
-void Optimizer::VIOInitialization(const std::vector<KeyFrame*>& vKeyFrames)
+double Optimizer::VIOInitialization(const std::vector<KeyFrame*>& vKeyFrames, double& scale, Eigen::Vector3d& GravityVec)
 {
     g2o::SparseOptimizer optimizer;
     g2o::BlockSolverX::LinearSolverType * linearSolver;
@@ -330,13 +330,19 @@ void Optimizer::VIOInitialization(const std::vector<KeyFrame*>& vKeyFrames)
     optimizer.setAlgorithm(solver);
     g2o::VertexScaleAndGravity* vScaleGravity = new g2o::VertexScaleAndGravity(); 
     vScaleGravity->setId(0);
-
+    vScaleGravity->setFixed(false);
     optimizer.addVertex(vScaleGravity);
+    
+    cv::Mat Tbc = ConfigParam::GetMatTbc();
+    cv::Mat Rbc = Tbc.rowRange(0, 3).colRange(0, 3);
+    cv::Mat pbc = Tbc.rowRange(0, 3).col(3);
+    cv::Mat Rcb = Rbc.t();
+    cv::Mat pcb = -Rcb * pbc;
 
     for (auto ite = vKeyFrames.cbegin(); ite != vKeyFrames.cend(); ite++)
     {
         KeyFrame *pKFi = *ite;
-        int idKF = pKFi->mnId * 2;
+        int idKF = pKFi->mnId * 2 + 1;
 
         g2o::VertexVelocityAndBias *vertexVeBias = new g2o::VertexVelocityAndBias();
         vertexVeBias->setId(idKF);
@@ -344,6 +350,7 @@ void Optimizer::VIOInitialization(const std::vector<KeyFrame*>& vKeyFrames)
         optimizer.addVertex(vertexVeBias);
     }
 
+    
     for (auto ite = vKeyFrames.begin(); ite != vKeyFrames.end(); ite++)
     {
         KeyFrame *pKF1 = *ite;                    // Current KF, store the IMU pre-integration between previous-current
@@ -355,14 +362,15 @@ void Optimizer::VIOInitialization(const std::vector<KeyFrame*>& vKeyFrames)
             auto preintegration = (*ite)->GetIMUPreInt();
             g2o::EdgeNavStateInitialization *edgeIMU = new g2o::EdgeNavStateInitialization();
             edgeIMU->setMeasurement(preintegration);
-            edgeIMU->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(2 * pKF0->mnId)));
-            edgeIMU->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(2 * pKF1->mnId)));
+            edgeIMU->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(2 * pKF0->mnId + 1)));
+            edgeIMU->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(2 * pKF1->mnId + 1)));
             edgeIMU->setVertex(2, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(0)));
         
             Matrix9d CovPVR = pKF1->GetIMUPreInt().getCovPVPhi();
             Matrix<double,6,6> SubPVR = CovPVR.block<6,6>(0,0);
             Matrix<double,3,3> NoiseCovBias = IMUData::getAccMeasCov();
             Matrix<double,9,9> CovarianceEdge;
+            CovarianceEdge.setZero();
             CovarianceEdge.block<6,6>(0,0) = SubPVR;
             CovarianceEdge.block<3,3>(6,6) = NoiseCovBias;
             edgeIMU->setInformation(CovarianceEdge.inverse());
@@ -381,7 +389,56 @@ void Optimizer::VIOInitialization(const std::vector<KeyFrame*>& vKeyFrames)
     }
 
     optimizer.initializeOptimization();
-    optimizer.optimize(5);
+    optimizer.setVerbose(true);
+    optimizer.optimize(20);
+
+    g2o::VertexScaleAndGravity* vertexScaleGravity = static_cast<g2o::VertexScaleAndGravity* >(optimizer.vertex(0));
+    auto ScaleGravity = vertexScaleGravity->estimate();
+    scale = ScaleGravity(0);
+    GravityVec = ScaleGravity.segment<3>(1);
+
+    // return these values back to the keyframe's variable.
+    for(auto lit=vKeyFrames.begin(); lit != vKeyFrames.end();  lit++)
+    {
+        KeyFrame* pKFi = *lit;
+
+        cv::Mat wPc = pKFi->GetPoseInverse().rowRange(0,3).col(3);                   // wPc
+        cv::Mat Rwc = pKFi->GetPoseInverse().rowRange(0,3).colRange(0,3);            // Rwc
+
+
+        auto stateKFi = pKFi->GetNavState();
+        auto P1 = stateKFi.Get_P();
+        g2o::VertexVelocityAndBias* vertexVBias = static_cast<g2o::VertexVelocityAndBias*>(optimizer.vertex(2*pKFi->mnId + 1));
+       
+        cv::Mat wPb = scale*wPc + Rwc*pcb;
+        // In optimized navstate, bias not changed, delta_bias not zero, should be added to bias
+        const auto optPVRns = vertexVBias->estimate();
+        auto Velocity = optPVRns.segment<3>(0);
+        auto AccBias = optPVRns.segment<3>(3);
+        pKFi->SetNavStatePos(Converter::toVector3d(wPb));
+        pKFi->SetNavStateBiasAcc(AccBias);
+        pKFi->SetNavStateVel(Velocity);
+        
+        
+    }
+    std::cout << vKeyFrames.size() << std::endl;
+    std::cout << "****" << std::endl;
+    g2o::SparseBlockMatrixXd spinv;
+    std::vector<g2o::OptimizableGraph::Vertex*> margVerteces;
+    // margVerteces.push_back(optimizer.vertex(0));
+    
+    int index = optimizer.vertex(0)->hessianIndex();
+
+    // bool flag = optimizer.computeMarginals(spinv, optimizer.vertex(0));
+    solver_ptr->saveHessian("/mnt/d/Hessian.txt");
+
+
+    // std::cout << "-- return :" << flag << " ---, hessian index: " << index << std::endl;
+    double det = 0.0;
+    
+    std::cout << "=======" << std::endl;
+    // double det = 0.0;
+    return det;
 
 
 }
@@ -1327,7 +1384,7 @@ void Optimizer::LocalBundleAdjustmentNavState(KeyFrame *pCurKF, const std::list<
         if(*pbStopFlag)
             bDoMore = false;
 
-     if (bDoMore)
+    if (bDoMore)
     {
         // Check inlier observations
         for (size_t i = 0, iend = vpEdgesMono.size(); i < iend; i++)

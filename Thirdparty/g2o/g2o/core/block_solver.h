@@ -141,7 +141,8 @@ namespace g2o {
 
       virtual void multiplyHessian(double* dest, const double* src) const { _Hpp->multiplySymmetricUpperTriangle(dest, src);}
 
-    protected:
+      virtual void getHessian(const SparseBlockMatrix<PoseMatrixType>* sparseHessian) const {sparseHessian = _Hpp;}
+      
       void resize(int* blockPoseIndices, int numPoseBlocks, 
           int* blockLandmarkIndices, int numLandmarkBlocks, int totalDim);
 

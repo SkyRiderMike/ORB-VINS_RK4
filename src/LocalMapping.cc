@@ -481,34 +481,6 @@ bool LocalMapping::YeeInitialVIO()
     if (mpMap->KeyFramesInMap() <= mnLocalWindowSize)
         return false;
 
-    static bool fopened = false;
-    static ofstream fgw, fscale, fbiasa, fcondnum, ftime, fbiasg;
-    if (!fopened)
-    {
-        // Need to modify this to correct path
-        string tmpfilepath = ConfigParam::getTmpFilePath();
-        fgw.open(tmpfilepath + "gw.txt");
-        fscale.open(tmpfilepath + "scale.txt");
-        fbiasa.open(tmpfilepath + "biasa.txt");
-        fcondnum.open(tmpfilepath + "condnum.txt");
-        ftime.open(tmpfilepath + "computetime.txt");
-        fbiasg.open(tmpfilepath + "biasg.txt");
-        if (fgw.is_open() && fscale.is_open() && fbiasa.is_open() &&
-            fcondnum.is_open() && ftime.is_open() && fbiasg.is_open())
-            fopened = true;
-        else
-        {
-            cerr << "file open error in TryInitVIO" << endl;
-            fopened = false;
-        }
-        fgw << std::fixed << std::setprecision(6);
-        fscale << std::fixed << std::setprecision(6);
-        fbiasa << std::fixed << std::setprecision(6);
-        fcondnum << std::fixed << std::setprecision(6);
-        ftime << std::fixed << std::setprecision(6);
-        fbiasg << std::fixed << std::setprecision(6);
-    }
-
     // Extrinsics
     cv::Mat Tbc = ConfigParam::GetMatTbc();
     cv::Mat Rbc = Tbc.rowRange(0, 3).colRange(0, 3);
@@ -520,34 +492,55 @@ bool LocalMapping::YeeInitialVIO()
     vector<KeyFrame *> vScaleGravityKF = mpMap->GetAllKeyFrames();
     int N = vScaleGravityKF.size();
 
+    assert(N>=3);
+
     // Step 1.
     // Try to compute initial gyro bias, using optimization with Gauss-Newton
     Vector3d bgest = Optimizer::OptimizeInitialGyroBias(vScaleGravityKF);
 
     // Update biasg and pre-integration in LocalWindow. Remember to reset back to zero
-    for (vector<KeyFrame *>::const_iterator vit = vScaleGravityKF.begin(), vend = vScaleGravityKF.end(); vit != vend; vit++)
+    for (auto vit = vScaleGravityKF.begin(), vend = vScaleGravityKF.end(); vit != vend; vit++)
     {
         KeyFrame *pKF = *vit;
         pKF->SetNavStateBiasGyr(bgest);
     }
-    for (vector<KeyFrame *>::const_iterator vit = vScaleGravityKF.begin(), vend = vScaleGravityKF.end(); vit != vend; vit++)
+    // compute delta p, delta v, delta Rotation.
+    for (auto vit = vScaleGravityKF.begin(), vend = vScaleGravityKF.end(); vit != vend; vit++)
     {
         KeyFrame *pKF = *vit;
         pKF->ComputePreInt();
     }
 
-    // g2o::SparseOptimizer optimizer;
-    // g2o::BlockSolverX::LinearSolverType * linearSolver;
-
-    // linearSolver = new g2o::LinearSolverEigen<g2o::BlockSolverX::PoseMatrixType>();
+    // set the position and rotation into nav states..
+    for(auto vit=vScaleGravityKF.begin(), vend=vScaleGravityKF.end(); vit!=vend; vit++)
+    {
+        KeyFrame* pKF = *vit;
+        // Position and rotation of visual SLAM
+        cv::Mat wPc = pKF->GetPoseInverse().rowRange(0,3).col(3);                   // wPc
+        cv::Mat Rwc = pKF->GetPoseInverse().rowRange(0,3).colRange(0,3);            // Rwc
+        // Set position and rotation of navstate
+        // cv::Mat wPb = scale*wPc + Rwc*pcb;
+        pKF->SetNavStatePos(Converter::toVector3d(wPc));
+        pKF->SetNavStateRot(Converter::toMatrix3d(Rwc*Rcb));
     
-    // g2o::BlockSolverX * solver_ptr = new g2o::BlockSolverX(linearSolver);
+    }
 
-    // g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr);
-    // //g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr);
-    // optimizer.setAlgorithm(solver);
-    // VertexScaleAndGravity* vScaleGravity = new VertexScaleAndGravity(); 
+    double scale;
+    Eigen::Vector3d gravity;
+    std::cout << "begin optimization.. " << std::endl;
+    double det = Optimizer::VIOInitialization(vScaleGravityKF, scale, gravity);
+
+    std::cout << "optimization finished..." << std::endl;
     
+    // printf ....
+    std::cout << "initialization has : " << vScaleGravityKF.size() << " keyframes .." << std::endl;
+    std::cout << "scale: " << scale << std::endl;
+    std::cout << "Gravity: " << gravity << std::endl;
+
+    std::cout << "Det: " << det << std::endl;
+
+    return true;
+   
 
 }
 
@@ -656,7 +649,7 @@ void LocalMapping::Run()
                 // Try to initialize VIO, if not inited
                 if(!GetVINSInited())
                 {
-                    bool tmpbool = TryInitVIO();
+                    bool tmpbool = YeeInitialVIO();
                     SetVINSInited(tmpbool);
                     if(tmpbool)
                     {

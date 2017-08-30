@@ -51,7 +51,7 @@ public:
 
     void static LocalBundleAdjustment(KeyFrame *pKF, const std::list<KeyFrame*> &lLocalKeyFrames, bool* pbStopFlag, Map* pMap, LocalMapping* pLM=NULL);
 
-    void static VIOInitialization(const std::vector<KeyFrame*>& vKeyFrames);
+    double static VIOInitialization(const std::vector<KeyFrame*>& vKeyFrames, double& scale, Eigen::Vector3d& gravity);
 
 public:
     void static BundleAdjustment(const std::vector<KeyFrame*> &vpKF, const std::vector<MapPoint*> &vpMP,

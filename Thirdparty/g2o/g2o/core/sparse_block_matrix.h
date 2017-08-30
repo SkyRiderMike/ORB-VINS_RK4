@@ -63,7 +63,7 @@ class SparseBlockMatrix {
 
   public:
     //! this is the type of the elementary block, it is an Eigen::Matrix.
-    typedef MatrixType SparseMatrixBlock;
+    typedef MatrixType  ;
 
     //! columns of the matrix
     inline int cols() const {return _colBlockIndices.size() ? _colBlockIndices.back() : 0;}
